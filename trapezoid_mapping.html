@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Deep Learning Cars</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+/**********/
+body {
+    background-color: #AAA;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 16px;
+}
+/**********/
+    </style>    
+    <script src="js/geo/Vec2.js"></script>
+    <script src="js/geo/Segment2.js"></script>
+    <script src="js/geo/Trapezoid.js"></script>
+    <script src="js/geo/AfXform.js"></script>
+    <script src="js/geo/AABB.js"></script>
+    <script>
+/**********/
+
+let canvas, ctx;
+let cx, cy, cw, ch;
+let scale = 5;
+
+let vw, vh;
+let xmin, xmax, ymin, ymax;
+
+window.addEventListener('load', function(ev) {
+    setupCanvas();
+    redraw();
+
+    // canvas listeners
+    canvas.addEventListener('click', onCanvasClick);
+    canvas.addEventListener('mousemove', onCanvasMove);
+    canvas.addEventListener('wheel', onCanvasWheel);
+});
+
+function setupCanvas() {
+    canvas = document.getElementsByTagName('canvas')[0];
+    ctx = canvas.getContext('2d');
+    cx = canvas.offsetLeft;
+    cy = canvas.offsetTop;
+    cw = canvas.width;
+    ch = canvas.height;
+
+    ctx.scale(scale, scale);
+
+    vw = cw / scale;
+    vh = ch / scale;
+
+    xmin = -vw/2;
+    ymin = -vh/2;
+    xmax =  xmin + vw;
+    ymax =  ymin + vh;
+    ctx.translate(vh/2, vh/2);
+}
+
+function redraw() {
+    // background
+    ctx.fillStyle = '#FFF'
+    ctx.fillRect(xmin, ymin, vw, vw);
+
+    // origin lines
+    ctx.strokeStyle = '#DDD'
+    ctx.lineWidth = 1/scale;
+    ctx.beginPath();
+    ctx.moveTo(0, ymin);
+    ctx.lineTo(0, ymax);
+    ctx.moveTo(xmin, 0);
+    ctx.lineTo(xmax, 0);
+    ctx.stroke();
+
+    // draw track from data
+    drawTrack(trackData);
+    drawSegments();
+    drawDestRect();
+
+    // draw grid markers
+    drawGridMarkers();
+
+
+}
+
+function drawGridMarkers() {
+    let rows = 18;
+    let cols = 18;
+    let gridsrc = new Vec2();
+    let griddst = new Vec2();
+    for (let j = 0; j <= rows; j++) {
+        for (let i = 0; i <= cols; i++) {
+            gridsrc.setFrom2Values(i/cols, j/rows);
+            drawMark(toDst(gridsrc), '#CCC');
+            griddst = tpzd.unmap(gridsrc);
+            drawMark(griddst, '#CCC');
+        }
+    }
+}
+
+function onCanvasClick(ev) {
+    // console.log(ev);
+    x = ev.pageX - cx;
+    y = ev.pageY - cy;
+    x = (x / scale) + xmin;
+    y = (y / scale) + ymin;
+    onViewClick(x, y);
+}
+
+function onCanvasMove(ev) {
+    // console.log(ev);
+    x = ev.pageX - cx;
+    y = ev.pageY - cy;
+    x = (x / scale) + xmin;
+    y = (y / scale) + ymin;
+    onViewMove(x, y);
+}
+
+function onCanvasWheel(ev) {
+    // console.log(ev);
+    if      (ev.deltaY > 0) onViewWheel( 1);
+    else if (ev.deltaY < 0) onViewWheel(-1);
+}
+
+let prevX, prevY;
+let currX, currY;
+let trackWidth = 10;
+
+let editingActive = false;
+let trackData = [[-76.2,-59.4,50.84],[-21,-59.6,50.84],[32.8,-21.2,70.84],[35.2,41.8,50.84]];
+//let trackData = [[-26.2,-159.4,50.84],[-21,-59.6,50.84],[32.8,-21.2,50.84],[135.2,-21.8,50.84]];
+
+function onViewClick(x, y) {
+//    console.log('CLICK: ', x, y);
+    redraw();
+
+    let fwd = true;
+    if (x < 0 && y > 0) fwd = false;
+
+    let P1 = new Vec2(x,y);
+    drawMark(P1);
+
+    if (fwd) {
+
+//        console.log("trapezoid.isPointInsideAABB: " + tpzd.isPointInsideAABB(P1));
+//        console.log("trapezoid.isPointInside: " + tpzd.isPointInside(P1));
+
+        
+/*
+        let Parr = tpzd.multimap(P1);
+        for (let i = 0; i < Parr.length; i++) {
+            let P2 = Parr[i];
+            let P3 = toDst(P2);
+            drawMark(P3);
+        }
+*/        
+        
+        let P2 = tpzd.map(P1);
+
+        let P3 = new Vec2(0,0);
+        P3.x = dstpoint.x + P2.x * dstsize.x;
+        P3.y = dstpoint.y + P2.y * dstsize.y;
+//        console.log(P2);
+
+        drawMark(P3);
+        
+    }
+    else {
+        let P2 = new Vec2(0,0);
+        P2.x = (P1.x - dstpoint.x) / dstsize.x;
+        P2.y = (P1.y - dstpoint.y) / dstsize.y;
+
+        let P3 = tpzd.unmap(P2);
+//        console.log(P2);
+        drawMark(P3);
+
+/*
+        let Parr = tpzd.multiunmap(P2);
+        for (let i = 0; i < Parr.length; i++) {
+            let P3 = Parr[i];
+            drawMark(P3);
+        }        
+*/
+    }
+
+
+/*
+    if (!editingActive) {
+        if (trackData.length == 0) {
+            trackData.push([x, y, trackWidth]);
+            trackData.push([x, y, trackWidth]);
+        }
+        editingActive = true;
+    }
+
+    if (editingActive) {
+        trackData.push([x, y, trackWidth]);
+        redraw();
+    }
+*/    
+}
+
+function onViewMove(x, y) {
+    onViewClick(x, y);
+    // console.log('MOVE:  ', x, y);
+/*
+    if (editingActive) {
+        trackData[trackData.length - 1] = [x, y, trackWidth];
+        redraw();
+    }
+*/    
+}
+
+function onViewWheel(delta) {
+    // console.log('WHEEL: ', delta);
+/*    
+    if      (delta > 0) trackWidth *= 1.1;
+    else if (delta < 0) trackWidth /= 1.1;
+    trackWidth = 0.01 * Math.round(trackWidth*100);
+    if (trackData.length > 0) {
+        let last = trackData.pop();
+        last[2] = trackWidth;
+        trackData.push(last);
+    }
+    redraw();
+*/    
+}
+
+function calculateParallelTrack(track, factor) {
+    let len = track.length;
+    if (len < 2) return [];
+
+    let imax = len - 1;
+
+    let para = [];
+
+    for (let i = 0; i <= imax; i++) {
+        let e = track[i];
+        let ep = (i != 0   ) ? track[i-1] : track[i];
+        let en = (i != imax) ? track[i+1] : track[i];
+
+        let dx = en[0] - ep[0];
+        let dy = en[1] - ep[1];
+        let dist = Math.sqrt(dx*dx + dy*dy);
+        let tw = e[2];
+
+        let x = e[0] - dy * tw * factor / dist;
+        let y = e[1] + dx * tw * factor / dist;
+
+        para.push([x, y, tw]);
+    }
+
+    return para;
+}
+
+function drawPointArray(parr) {
+    if (parr.length < 2) return;
+    ctx.moveTo(parr[0][0], parr[0][1]);
+    for (let i = 1; i < parr.length; i++) {
+        ctx.lineTo(parr[i][0], parr[i][1]);
+    }
+}
+
+let tpzd = new Trapezoid();
+
+function drawTrack(track) {
+    if (track.length < 2) return;
+
+    ctx.strokeStyle = '#AAA'
+    ctx.lineWidth = 1/scale;
+    ctx.beginPath();
+    drawPointArray(track);
+    ctx.stroke();
+
+    paraL = calculateParallelTrack(track, -0.5);
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 1/scale;
+    ctx.beginPath();
+    drawPointArray(paraL);
+    ctx.stroke();
+
+    paraR = calculateParallelTrack(track, 0.5);
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 1/scale;
+    ctx.beginPath();
+    drawPointArray(paraR);
+    ctx.stroke();
+
+    tpzd.segL.p1.x = paraL[1][0];
+    tpzd.segL.p1.y = paraL[1][1];
+    tpzd.segL.p2.x = paraL[2][0];
+    tpzd.segL.p2.y = paraL[2][1];
+
+    tpzd.segR.p1.x = paraR[1][0];
+    tpzd.segR.p1.y = paraR[1][1];
+    tpzd.segR.p2.x = paraR[2][0];
+    tpzd.segR.p2.y = paraR[2][1];
+
+    tpzd.setupTransform();
+/*
+    console.log(tpzd.afxL1.fwd(tpzd.segL.p1));
+    console.log(tpzd.afxL1.fwd(tpzd.segL.p2));
+    console.log(tpzd.afxL1.fwd(tpzd.segR.p1));
+*/    
+}
+
+function drawSegments() {
+    ctx.strokeStyle = '#800'
+    ctx.lineWidth = 2/scale;
+    ctx.beginPath();
+    tpzd.segL.p1.moveTo(ctx);
+    tpzd.segL.p2.lineTo(ctx);
+    tpzd.segR.p1.moveTo(ctx);
+    tpzd.segR.p2.lineTo(ctx);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#080'
+    ctx.lineWidth = 2/scale;
+    ctx.beginPath();
+    tpzd.segL.p1.moveTo(ctx);
+    tpzd.segR.p1.lineTo(ctx);
+    tpzd.segL.p2.moveTo(ctx);
+    tpzd.segR.p2.lineTo(ctx);
+    ctx.stroke();
+    
+    ctx.strokeStyle = '#008'
+    ctx.lineWidth = 2/scale;
+    ctx.beginPath();
+    ctx.moveTo(0.5 * (tpzd.segL.p1.x + tpzd.segR.p1.x), 0.5 * (tpzd.segL.p1.y + tpzd.segR.p1.y));
+    ctx.lineTo(0.5 * (tpzd.segL.p2.x + tpzd.segR.p2.x), 0.5 * (tpzd.segL.p2.y + tpzd.segR.p2.y));
+    ctx.stroke();
+}
+
+let dstpoint = new Vec2(-80,20);
+let dstsize = new Vec2(60,60);
+function toDst(point) {
+    return new Vec2(
+        dstpoint.x + point.x * dstsize.x,
+        dstpoint.y + point.y * dstsize.y
+    );
+}
+
+function drawDestRect() {
+    ctx.strokeStyle = '#800'
+    ctx.lineWidth = 2/scale;
+    ctx.beginPath();
+    ctx.moveTo(dstpoint.x            , dstpoint.y);
+    ctx.lineTo(dstpoint.x + dstsize.x, dstpoint.y);
+    ctx.moveTo(dstpoint.x            , dstpoint.y + dstsize.y);
+    ctx.lineTo(dstpoint.x + dstsize.x, dstpoint.y + dstsize.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#080'
+    ctx.lineWidth = 2/scale;
+    ctx.beginPath();
+    ctx.moveTo(dstpoint.x            , dstpoint.y            );
+    ctx.lineTo(dstpoint.x            , dstpoint.y + dstsize.y);
+    ctx.moveTo(dstpoint.x + dstsize.x, dstpoint.y            );
+    ctx.lineTo(dstpoint.x + dstsize.x, dstpoint.y + dstsize.y);
+    tpzd.segL.p1.moveTo(ctx);
+    tpzd.segR.p1.lineTo(ctx);
+    tpzd.segL.p2.moveTo(ctx);
+    tpzd.segR.p2.lineTo(ctx);
+    ctx.stroke();
+    
+    ctx.strokeStyle = '#008'
+    ctx.lineWidth = 2/scale;
+    ctx.beginPath();
+    ctx.moveTo(dstpoint.x            , dstpoint.y + 0.5*dstsize.y);
+    ctx.lineTo(dstpoint.x + dstsize.x, dstpoint.y + 0.5*dstsize.y);
+    ctx.stroke();
+}
+
+function drawMark(point, color='#F80') {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2/scale;
+    ctx.beginPath();
+    let d = 1;
+    ctx.moveTo(point.x - d, point.y - d);
+    ctx.lineTo(point.x + d, point.y + d);
+    ctx.moveTo(point.x + d, point.y - d);
+    ctx.lineTo(point.x - d, point.y + d);
+    ctx.closePath();
+    ctx.stroke();
+}
+
+window.addEventListener('keyup', function(ev) {
+    // console.log(ev);
+    if (ev.keyCode == 27) {
+        pauseEditing();
+    }
+    else if (ev.keyCode == 13) {
+        logTrackToConsole(trackData);
+    }
+});
+
+function pauseEditing() {
+    editingActive = false;
+    trackData.pop();
+    redraw();
+}
+
+function logTrackToConsole(track) {
+    if (editingActive)
+        console.log("Warning: editing still active. Last point floating (but included).");
+    let str = JSON.stringify(track, function(key, val) {
+        return val.toFixed ? Number(val.toFixed(4)) : val;
+    })
+
+    console.log(str);
+}
+
+/**********/
+    </script>
+</head>
+<body>
+    <canvas width=1000 height="1000"></canvas>
+    <p>Track Editor - Click to add point - Mouse wheel to change width - ESC to stop editing - ENTER to log track to console</p>
+</body>
+</html>

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Page Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+/**********/
+body {
+    background-color: #AAA;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 16px;
+}
+/**********/
+    </style>    
+    <script src="js/TrackManager.js"></script>
+    <script src="js/Car.js"></script>
+    <script src="js/PerformanceMeasure.js"></script>
+    <script src="js/geo/Vec2.js"></script>
+    <script src="js/geo/Segment2.js"></script>
+    <script src="js/geo/Trapezoid.js"></script>
+    <script src="js/geo/AfXform.js"></script>
+    <script src="js/geo/AABB.js"></script>
+
+    <script>
+/**********/
+let canvas, ctx;
+let cx, cy, cw, ch;
+let scale = 5;
+
+let vw, vh;
+let xmin, xmax, ymin, ymax;
+
+let trackmgr;
+let car;
+
+window.addEventListener('load', function(ev) {
+    setupCanvas();
+
+    trackmgr = new TrackManager();
+
+    // var testResultCb = function(resultOk) {console.log('loadTrack ' + (resultOk ? 'OK' : 'ERROR'))};
+    // trackmgr.loadTrack('track011.txt', testResultCb);
+
+    trackmgr.loadTrack('track07.txt', onTrackLoaded);
+
+    car = new Car();
+
+    redraw();
+});
+
+function setupCanvas() {
+    canvas = document.getElementsByTagName('canvas')[0];
+    ctx = canvas.getContext('2d');
+    cx = canvas.offsetLeft;
+    cy = canvas.offsetTop;
+    cw = canvas.width;
+    ch = canvas.height;
+
+    ctx.scale(scale, scale);
+
+    vw = cw / scale;
+    vh = ch / scale;
+
+    xmin = -vw/2;
+    ymin = -vh/2;
+    xmax =  xmin + vw;
+    ymax =  ymin + vh;
+    ctx.translate(vh/2, vh/2);
+}
+
+function redraw() {
+    // background
+    ctx.fillStyle = '#FFF'
+    ctx.fillRect(xmin, ymin, vw, vw);
+
+    // origin lines
+    ctx.strokeStyle = '#DDD'
+    ctx.lineWidth = 1/scale;
+    ctx.beginPath();
+    ctx.moveTo(0, ymin);
+    ctx.lineTo(0, ymax);
+    ctx.moveTo(xmin, 0);
+    ctx.lineTo(xmax, 0);
+    ctx.stroke();
+
+    // draw track
+    drawTrack();
+
+    // draw car
+    drawCar();
+}
+
+function onTrackLoaded(resultOk) {
+    if (!resultOk) {
+        console.log('onTrackLoaded: ERROR');
+        return;
+    }
+
+    car.setInitialPosition(trackmgr.getInitialCarPosition());
+    car.setInitialDirection(trackmgr.getInitialCarDirection());
+
+    beginAnimation();
+}
+
+function drawPointArray(parr) {
+    if (parr.length < 2) return;
+    ctx.moveTo(parr[0][0], parr[0][1]);
+    for (let i = 1; i < parr.length; i++) {
+        ctx.lineTo(parr[i][0], parr[i][1]);
+    }
+}
+
+function drawTrack() {
+    drawTrapezoidPerpendiculars();
+    
+    let seglist = trackmgr.getTrackPointList();
+
+    for (i = 0; i < seglist.length; i++) {
+        let seg = seglist[i];
+
+        ctx.strokeStyle = '#000'
+        ctx.lineWidth = 2/scale;
+        ctx.beginPath();
+        drawPointArray(seg);
+        ctx.stroke();
+    }
+
+    drawTrapezoidPerpendiculars();
+}
+
+function drawTrapezoidPerpendiculars()
+{
+    if (trackmgr.trapezoids == null) return;
+
+    ctx.strokeStyle = '#CCC'
+    ctx.lineWidth = 1/scale;
+    ctx.beginPath();
+    for (i = 0; i < trackmgr.trapezoids.length; i++) {
+        let tpzd = trackmgr.trapezoids[i];
+        if (i == 0) {
+            tpzd.segL.p1.moveTo(ctx);
+            tpzd.segR.p1.lineTo(ctx);
+        }
+        tpzd.segL.p2.moveTo(ctx);
+        tpzd.segR.p2.lineTo(ctx);
+    }
+    ctx.stroke();
+}
+
+function drawCar() {
+    let arr = car.getCornersAsArray();
+    ctx.fillStyle = '#24A'
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 1/scale;
+    ctx.beginPath();
+    for (let i = 0; i < arr.length / 2; i++) {
+        let x = arr[2*i+0];
+        let y = arr[2*i+1];
+        if (i == 0) ctx.moveTo(x, y);
+        else        ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.strokeStyle = '#080';
+    ctx.beginPath();
+    let rays = car.getRaySegments();
+    for (let i = 0; i < rays.length; i++) {
+        let r = rays[i];
+        ctx.moveTo(r.p1.x, r.p1.y);
+        ctx.lineTo(r.p2.x, r.p2.y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.strokeStyle = '#800';
+    ctx.beginPath();
+    let d = 1;
+    for (let i = 0; i < isecRays.length; i++) {
+        let isec = isecRays[i];
+        ctx.moveTo(isec.x - d, isec.y - d);
+        ctx.lineTo(isec.x + d, isec.y + d);
+        ctx.moveTo(isec.x + d, isec.y - d);
+        ctx.lineTo(isec.x - d, isec.y + d);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+/*
+    let mirr = trackmgr.findMirrorPointWithTrackCenter(car.pos);
+    if (mirr != null) {
+        ctx.strokeStyle = '#008';
+        ctx.beginPath();
+        let d = 1;
+        ctx.moveTo(mirr.x - d, mirr.y - d);
+        ctx.lineTo(mirr.x + d, mirr.y + d);
+        ctx.moveTo(mirr.x + d, mirr.y - d);
+        ctx.lineTo(mirr.x - d, mirr.y + d);
+        ctx.closePath();
+        ctx.stroke();
+    }
+*/    
+}
+
+let animationActive = true;
+
+function beginAnimation() {
+    animationActive = true;
+    requestAnimationFrame(doAnimation);
+}
+
+updatePerf = new PeriodicPerf('human_circuit/update+collisions', 100);
+
+let prevTime = -1;
+
+function doAnimation(time) {
+    if (prevTime < 0) {
+        prevTime = time;
+        requestAnimationFrame(doAnimation);
+        return;
+    }
+
+    let deltaTime = 0.001 * (time - prevTime);
+    prevTime = time;
+
+    updatePerf.beginMeasure();
+    update(deltaTime);
+    let repetitions = 1000;
+//    let repetitions = 1;
+    for (let i = 0; i < repetitions; i++) {
+        calculateCarTrackCollisions();
+        calculateCarRaysTrackCollisions();
+        let res = trackmgr.getCompletionFromPosition(car.pos);
+        if (res != null)
+            comp01 = res;
+    }
+    updatePerf.endMeasure();
+
+    redraw();
+    if (animationActive)
+        requestAnimationFrame(doAnimation);
+}
+
+let accel = false;
+let decel = false;
+let steerL = false;
+let steerR = false;
+
+window.addEventListener('keydown', function(ev) {
+    // console.log(ev);
+    if      (ev.key == 'ArrowLeft' ) steerL = true;
+    else if (ev.key == 'ArrowRight') steerR = true;
+    else if (ev.key == 'ArrowUp'   ) accel  = true;
+    else if (ev.key == 'ArrowDown' ) decel  = true;
+    else if (ev.key == ' ') autoEngineToZero = true;
+});
+
+window.addEventListener('keyup', function(ev) {
+    if      (ev.key == 'ArrowLeft' ) steerL = false;
+    else if (ev.key == 'ArrowRight') steerR = false;
+    else if (ev.key == 'ArrowUp'   ) accel  = false;
+    else if (ev.key == 'ArrowDown' ) decel  = false;
+});
+
+let steer01 = 0.0;
+let engine01 = 0.0;
+let comp01 = 0.0;
+
+let steerFactor = 1.0;
+let engineFactor = 1.0;
+
+let autoSteerToZero = false;
+let autoEngineToZero = false;
+
+function clamp(val, min, max)
+{
+    if (val < min) val = min;
+    if (val > max) val = max;
+    return val;
+}
+
+function updateSteerTowardsZero(deltaTime) {
+    if (steer01 == 0) {}
+        else if (steer01 < 0) {
+            steer01 += steerFactor * deltaTime;
+            if (steer01 > 0) steer01 = 0;
+        }
+        else if (steer01 > 0) {
+            steer01 -= steerFactor * deltaTime;
+            if (steer01 < 0) steer01 = 0;
+        }
+}
+
+function updateEngineTowardsZero(deltaTime) {
+    if (engine01 == 0) {}
+        else if (engine01 < 0) {
+            engine01 += engineFactor * deltaTime;
+            if (engine01 > 0) engine01 = 0;
+        }
+        else if (engine01 > 0) {
+            engine01 -= steerFactor * deltaTime;
+            if (engine01 < 0) engine01 = 0;
+        }
+}
+
+function update(deltaTime) {
+    // console.log(accel, decel);
+    elem_steer = document.getElementById('steer-text');
+    elem_engine = document.getElementById('engine-text');
+    elem_comp = document.getElementById('completion-text');
+
+    if (steerL && steerR) {
+    }
+    else if (!steerL && !steerR) {
+        autoSteerToZero = true;
+    }
+    else if (steerL) {
+        autoSteerToZero = false;
+        steer01 -= steerFactor * deltaTime;
+    }
+    else if (steerR) {
+        autoSteerToZero = false;
+        steer01 += steerFactor * deltaTime;
+    }
+
+    if (autoSteerToZero)
+        updateSteerTowardsZero(deltaTime);
+    steer01 = clamp(steer01, -1, 1);
+
+    if (accel && decel) {
+        autoEngineToZero = true;
+    }
+    else if (!accel && !decel) {
+
+    }
+    else if (accel) {
+        autoEngineToZero = false;
+        engine01 += engineFactor * deltaTime;
+    }
+    else if (decel) {
+        autoEngineToZero = false;
+        engine01 -= engineFactor * deltaTime;
+    }
+
+    if (autoEngineToZero)
+        updateEngineTowardsZero(deltaTime);
+    engine01 = clamp(engine01, -1, 1);
+
+    elem_engine.innerHTML = 'Engine: ' + engine01.toFixed(3);
+    elem_steer.innerHTML = 'Steer: ' + steer01.toFixed(3);
+
+    elem_comp.innerHTML = 'Completion: ' + comp01.toFixed(3);
+
+    car.setEngine01(engine01);
+    car.setSteer01(steer01);
+
+    car.updateWithDeltaTime(0.01);
+
+//    animationActive = false;
+}
+
+function calculateCarTrackCollisions() {
+    let carSegList = car.getLimitSegments();
+
+    for (let i = 0; i < carSegList.length; i++) {
+        let isecs = trackmgr.getIntersectionsWithSegment(carSegList[i]);
+        if (isecs.length > 0) {
+            car.setCrashed();
+                break;
+        }
+    }    
+}
+
+let isecRays = [];
+
+function calculateCarRaysTrackCollisions() {
+    isecRays = [];
+
+    let rays = car.getRaySegments();
+
+    for (let i = 0; i < rays.length; i++) {
+        let isec = trackmgr.getNearestIntersectionWithSegment(rays[i]);
+        if (isec != null)
+            isecRays.push(isec);
+    }
+}
+
+function stopCar() {
+    autoEngineToZero = true;
+}
+
+
+/**********/
+    </script>
+</head>
+<body>
+    <canvas width="1000" height="1000"></canvas>
+    <p id='engine-text'>Engine: -</p>
+    <p id='steer-text'>Steer: -</p>
+    <p id='completion-text'>Completion: -</p>
+</body>
+</html>
