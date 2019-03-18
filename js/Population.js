@@ -157,16 +157,24 @@ class Population
         }
 
         this.individuals.sort(function(firstEl, secondEl) {
-            if (!firstEl.finished || !firstEl.finished)
+            if (!firstEl.finished && !secondEl.finished)
+                // no one has finished, use completion for comparing
                 return secondEl.comp01 - firstEl.comp01;
-            else
+
+            if (firstEl.finished && secondEl.finished)
+                // both have finished, use framecount for comparing
                 return firstEl.frameCount - secondEl.frameCount;
+
+            if (firstEl.finished && !secondEl.finished)
+                return -1;
+            else
+                return 1;
         });
         if (!anyCarAliveIntoCircuit) {
             let bestCar = this.individuals[0];
-            console.log("best car completion: " + bestCar.comp01);
-            console.log("logging weights");
-            console.log(bestCar.nn.getWeights());
+            //console.log("best car completion: " + bestCar.comp01);
+            //console.log("logging weights");
+            //console.log(bestCar.nn.getWeights());
             this.darwinize();
             this.resetAllCars();
             this.generationIndex++;

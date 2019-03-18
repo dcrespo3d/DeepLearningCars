@@ -195,7 +195,7 @@ function drawPopulation()
 
     for (let i = count-1; i >= 0; i--) {
         let car = population.individuals[i];
-        drawCar(car, i==0);
+        drawCar(car, i==0||i==1);
     }
 }
 
@@ -360,9 +360,9 @@ function updateEngineTowardsZero(deltaTime) {
 }
 
 function update(deltaTime) {
-    updatePerf.beginMeasure();
+//    updatePerf.beginMeasure();
     population.updateWithDeltaTime(0.02);
-    updatePerf.endMeasure();
+//    updatePerf.endMeasure();
 
     var bestCar = population.individuals[0];
     elem_gen.innerHTML = 'Generation: ' + (1 + population.generationIndex);
