@@ -114,17 +114,6 @@ class NeuralLayer
             }
         }
     }
-
-    doRandomMutation(range)
-    {
-        let weirow = this.weights;
-        for (let j = 0; j < weirow.length; j++) {
-            let weicol = weirow[j];
-            for (let i = 0; i < weicol.length; i++) {
-                weicol[i] += (-0.5 + Math.random()) * range;
-            }
-        }
-    }
 }
 
 var testNeuralLayer = function() {

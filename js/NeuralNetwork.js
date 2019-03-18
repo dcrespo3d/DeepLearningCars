@@ -72,14 +72,6 @@ class NeuralNetwork
         }
     }
 
-    doRandomMutation(range)
-    {
-        for (let i = 0; i < this.layers.length; i++) {
-            let layer = this.layers[i];
-            layer.doRandomMutation(range);
-        }
-    }
-
 }
 
 var testNeuralNetwork = function()

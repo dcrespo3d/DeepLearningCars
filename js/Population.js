@@ -67,7 +67,7 @@ class Population
         }
     }
 
-    recombination() {
+    performRecombination() {
         let car0 = this.individuals[0];
         let car1 = this.individuals[1];
         let src0 = car0.nn.getWeights();
@@ -90,25 +90,35 @@ class Population
             let car0 = this.individuals[2*i+0];
             let car1 = this.individuals[2*i+1];
             this.recombineWeights(src0, src1, dst0, dst1, swapProb);
-            this.mutateWeights(dst0, mutProb, mutAmount);
-            this.mutateWeights(dst1, mutProb, mutAmount);
             car0.nn.setWeights(dst0);
             car1.nn.setWeights(dst1);
-            //car.nn.doRandomMutation(0.5);
         }
     }
 
-    darwinize() {
-        this.recombination();
-        /*
-        let bestCar = this.individuals[0];
-        let warr = bestCar.nn.getWeights();
+    performMutation() {
+        let car0 = this.individuals[0];
+        let car1 = this.individuals[1];
+
+        let mutProb = 0.3;
+        let mutAmount = 2.0;
+
+        if (car0.finished && car1.finished)
+        {
+            mutProb = 0.1;
+            mutAmount = 0.5;
+        }
+
         for (let i = 0; i < this.individuals.length; i++) {
             let car = this.individuals[i];
-            car.nn.setWeights(warr);
-            car.nn.doRandomMutation(0.5);
+            let wei = car.nn.getWeights();
+            this.mutateWeights(wei, mutProb, mutAmount);
+            car.nn.setWeights(wei);
         }
-        */
+    }
+
+    evolveToNextGeneration() {
+        this.performRecombination();
+        this.performMutation();
     }
 
     getTotalCount() {
@@ -171,11 +181,14 @@ class Population
                 return 1;
         });
         if (!anyCarAliveIntoCircuit) {
-            let bestCar = this.individuals[0];
-            //console.log("best car completion: " + bestCar.comp01);
-            //console.log("logging weights");
-            //console.log(bestCar.nn.getWeights());
-            this.darwinize();
+            let logBestCar = false;
+            if (logBestCar) {
+                let bestCar = this.individuals[0];
+                console.log("best car completion: " + bestCar.comp01);
+                console.log("logging weights");
+                console.log(JSON.stringify(bestCar.nn.getWeights()));
+                }
+            this.evolveToNextGeneration();
             this.resetAllCars();
             this.generationIndex++;
         }

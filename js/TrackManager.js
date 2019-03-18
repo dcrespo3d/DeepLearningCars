@@ -329,7 +329,7 @@ class TrackManager
             if (!tpzd.isPointInsideAABB(pos)) continue;
 
             let mpos = tpzd.map(pos);
-            if (mpos.x >= 0 && mpos.x <= 1) {
+            if (mpos.x >= 0 && mpos.x <= 1 && mpos.y >= 0 && mpos.y <= 1) {
                 currLenPos = this.segStarts[i] + mpos.x * this.segLengths[i];
                 break;
             }
